@@ -17,6 +17,34 @@ MAX_MESSAGE_T messagesToProcess[64];
 int numMessagesToProcess = 0;
 MAX_MESSAGE_T* notTheMessagesToProcess[64];
 
+void try_process_now(tm_message_t* a, int b)
+{
+  printf("%s\n", "a message is here!");
+
+  switch(a->type)
+  {
+  case EMessageType_Buffer:
+	  buffer_message_t* c = (buffer_message_t*)a;
+	  printf("format: %i\n", c->format);
+	  switch(c->format)
+	  {
+	  case EBufferFormat_None:
+		  unformattedbuffer_t* e = (unformattedbuffer_t*)c;
+		  if(e->size > 0)
+		  {
+			  void* msg = e + sizeof(unformattedbuffer_t);
+			  char* d = new char[e->size + 1];
+			  int i = 0;
+			  memcpy(d, msg, e->size);
+			  i += e->size;
+			  d[i] = '\0';
+			  printf("%s\n", d);
+		  }
+		  break;
+	  }
+	  break;
+  }
+}
 int discard_message(tm_message_t* a)
 {
 	//int b = a - messagesToProcess / sizeof(MAX_MESSAGE_T);
@@ -29,63 +57,63 @@ int discard_message(tm_message_t* a)
 		--numMessagesToProcess;
 	}
 }
-void try_process_and_discard(tm_message_t* a)
+void try_process_late_and_discard(tm_message_t* a)
 {
   printf("%s\n", "a message is here!");
-
-  switch(a->type)
-  {
-  case EMessageType_Buffer:
-	  buffer_message_t* b = (buffer_message_t*)a;
-	  printf("format: %i\n", b->format);
-	  switch(b->format)
-	  {
-	  case EBufferFormat_None:
-		  unformattedbuffer_t* c = (unformattedbuffer_t*)b;
-		  if(c->size > 0)
-		  {
-			  void* msg = c + 1;
-			  printf("%s\n", msg);
-		  }
-		  break;
-	  }
-	  break;
-  }
 
   discard_message(a);
 }
 
 void my_on_receive(tm_message_t* message, int a)
 {
-  if(numMessagesToProcess == length(messagesToProcess))
-  {
-    return; //< discard the message
-  }
-  for(int i = 0; i < length(messagesToProcess); ++i)
-  {
-	  // IDEA: perhaps if a message has additional data appended, process it directly, otherwise queue it up?
-	  // NOTE: I think that discard_message doesn't actually discard the message
-	  // NOTE: tcp_mini still has some code that should not be kept as is (referring to "blocking of sockets")
-	/*
-	 * if a slot in messagesToProcess is not occupied, the "same indexed" slot in notTheMessagesToProcess will be NULL
-	 * numMessagesToProcess is to be kept "up-to-date" accordingly
-	 */
-    if(notTheMessagesToProcess[i] == NULL)
-    {
-    	//notTheMessagesToProcess[i] = &messagesToProcess[i];
-    	void** c = (void**)&notTheMessagesToProcess[i];
-    	*c = (void*)&messagesToProcess[i];
-    	++numMessagesToProcess;
-    	//messagesToProcess[i] = message;
-    	memcpy(&messagesToProcess[i], message, a);
-    }
-  }
+	switch(message->type)
+	{
+	case EMessageType_Buffer:
+		{
+		  try_process_now(message, a); //< buffer messages may get very big, hence process them immediately instead of late.
+		}
+		break;
+	default:
+		{
+		if(numMessagesToProcess == length(messagesToProcess))
+		{
+			return; //< discard the message
+		}
+		for(int i = 0; i < length(messagesToProcess); ++i)
+		{
+			/*
+			 * if a slot in messagesToProcess is not occupied, the "same indexed" slot in notTheMessagesToProcess will be NULL
+			 * numMessagesToProcess is to be kept "up-to-date" accordingly
+			 */
+			if(notTheMessagesToProcess[i] == NULL)
+			{
+				//notTheMessagesToProcess[i] = &messagesToProcess[i];
+				void** c = (void**)&notTheMessagesToProcess[i];
+				*c = (void*)&messagesToProcess[i];
+				++numMessagesToProcess;
+				//messagesToProcess[i] = message;
+				memcpy(&messagesToProcess[i], message, a);
+			}
+		}
+		}
+		break;
+	}
 }
 
+void my_on_connected_to_us(char* ip)
+{
+	printf("%s connected\n", ip);
+}
+void my_on_hung_up(char* ip)
+{
+	printf("%s hung up\n", ip);
+}
 
 int main()
 {
   tm_set_on_receive(my_on_receive);
+  tm_set_on_hung_up(my_on_hung_up);
+  tm_set_on_connected_to_us(my_on_connected_to_us);
 
   printf("started\n");
 
@@ -106,7 +134,7 @@ int main()
 				  continue;
 			  }
 
-			  try_process_and_discard((tm_message_t*)notTheMessagesToProcess[i]);
+			  try_process_late_and_discard((tm_message_t*)notTheMessagesToProcess[i]);
 		  }
 	  } while(tm_poll(length(messagesToProcess)) == 1);
 
@@ -117,5 +145,7 @@ int main()
 
   tm_stop_being_a_match();
 
+  tm_unset_on_connected_to_us();
+  tm_unset_on_hung_up();
   tm_unset_on_receive(); //< NOTE: do we want to do this after/before stop_being_a_match?
 }
