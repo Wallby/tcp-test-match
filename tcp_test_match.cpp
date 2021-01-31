@@ -32,13 +32,15 @@ void try_process_now(tm_message_t* a, int b)
 		  unformattedbuffer_t* e = (unformattedbuffer_t*)c;
 		  if(e->size > 0)
 		  {
-			  void* msg = e + sizeof(unformattedbuffer_t);
+			  void* msg = ((void*)e) + sizeof(unformattedbuffer_t);
 			  char* d = new char[e->size + 1];
 			  int i = 0;
 			  memcpy(d, msg, e->size);
+			  printf("e->size %i\n", e->size);
 			  i += e->size;
 			  d[i] = '\0';
-			  printf("%s\n", d);
+			  printf("msg %s\n", d);
+			  delete d;
 		  }
 		  break;
 	  }
@@ -81,6 +83,12 @@ void my_on_receive(tm_message_t* message, int a)
 		}
 		for(int i = 0; i < length(messagesToProcess); ++i)
 		{
+			// NOTE: I think that discard_message doesn't actually discard the message
+			// NOTE: tcp_mini still has some code that should not be kept as is (referring to "blocking of sockets")
+
+			// CHANGELIST: ..
+			// .. String now copy constructs strings by copying the contents of the source buffer into a new one (internally in tcp-mini)
+			// .. displaying of "hello" message is now working (fixed incorrect pointer offsetting)
 			/*
 			 * if a slot in messagesToProcess is not occupied, the "same indexed" slot in notTheMessagesToProcess will be NULL
 			 * numMessagesToProcess is to be kept "up-to-date" accordingly
