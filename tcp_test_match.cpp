@@ -47,11 +47,14 @@ void try_process_now(tm_message_t* a, int b)
 	  break;
   }
 }
+
+#define byte char
+
 int discard_message(tm_message_t* a)
 {
 	//int b = a - messagesToProcess / sizeof(MAX_MESSAGE_T);
 	tm_message_t* c = (tm_message_t*)messagesToProcess;
-	int b = (a - c) / sizeof *messagesToProcess;
+	int b = (((byte*)a) - ((byte*)c)) / sizeof *messagesToProcess;
 	if(b >= 0 && b < length(messagesToProcess))
 	{
 		// "free up a"
@@ -101,6 +104,7 @@ void my_on_receive(tm_message_t* message, int a)
 				++numMessagesToProcess;
 				//messagesToProcess[i] = message;
 				memcpy(&messagesToProcess[i], message, a);
+				break;
 			}
 		}
 		}
