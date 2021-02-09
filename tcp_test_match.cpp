@@ -19,31 +19,37 @@ MAX_MESSAGE_T* notTheMessagesToProcess[64];
 
 void try_process_now(tm_message_t* a, int b)
 {
-  printf("%s\n", "a message is here!");
-
   switch(a->type)
   {
   case EMessageType_Buffer:
-	  buffer_message_t* c = (buffer_message_t*)a;
-	  printf("format: %i\n", c->format);
-	  switch(c->format)
 	  {
-	  case EBufferFormat_None:
-		  unformattedbuffer_t* e = (unformattedbuffer_t*)c;
-		  if(e->size > 0)
+		  buffer_message_t* c = (buffer_message_t*)a;
+		  switch(c->format)
 		  {
-			  void* msg = ((void*)e) + sizeof(unformattedbuffer_t);
-			  char* d = new char[e->size + 1];
-			  int i = 0;
-			  memcpy(d, msg, e->size);
-			  printf("e->size %i\n", e->size);
-			  i += e->size;
-			  d[i] = '\0';
-			  printf("msg %s\n", d);
-			  delete d;
+		  case EBufferFormat_None:
+			  {
+				  unformattedbuffer_t* e = (unformattedbuffer_t*)c;
+				  if(e->size > 0)
+				  {
+					  void* msg = ((void*)e) + sizeof(unformattedbuffer_t);
+					  char* d = new char[e->size + 1];
+					  int i = 0;
+					  memcpy(d, msg, e->size);
+					  i += e->size;
+					  d[i] = '\0';
+					  printf("unformatted buffer message.. size: %i, \"msg\": %s\n", e->size, d);
+					  delete d;
+				  }
+			  }
+			  break;
+		  default:
+			  printf("buffer message.. format: %i\n", c->format);
+			  break;
 		  }
-		  break;
 	  }
+	  break;
+  default:
+	  printf("unhandled message is here\n");
 	  break;
   }
 }
@@ -64,7 +70,12 @@ int discard_message(tm_message_t* a)
 }
 void try_process_late_and_discard(tm_message_t* a)
 {
-  printf("%s\n", "a message is here!");
+  switch(a->type)
+  {
+  default:
+	  printf("unhandled message is here\n");
+	  break;
+  }
 
   discard_message(a);
 }
@@ -76,37 +87,41 @@ void my_on_receive(tm_message_t* message, int a)
 	case EMessageType_Buffer:
 		{
 		  try_process_now(message, a); //< buffer messages may get very big, hence process them immediately instead of late.
+
+		  unformattedbuffer_t b = unformattedbuffer_default;
+		  b.size = 0;
+		  TM_SEND((tm_message_t*)&b, NULL, 0);
 		}
 		break;
 	default:
 		{
-		if(numMessagesToProcess == length(messagesToProcess))
-		{
-			return; //< discard the message
-		}
-		for(int i = 0; i < length(messagesToProcess); ++i)
-		{
-			// NOTE: I think that discard_message doesn't actually discard the message
-			// NOTE: tcp_mini still has some code that should not be kept as is (referring to "blocking of sockets")
-
-			// CHANGELIST: ..
-			// .. String now copy constructs strings by copying the contents of the source buffer into a new one (internally in tcp-mini)
-			// .. displaying of "hello" message is now working (fixed incorrect pointer offsetting)
-			/*
-			 * if a slot in messagesToProcess is not occupied, the "same indexed" slot in notTheMessagesToProcess will be NULL
-			 * numMessagesToProcess is to be kept "up-to-date" accordingly
-			 */
-			if(notTheMessagesToProcess[i] == NULL)
+			if(numMessagesToProcess == length(messagesToProcess))
 			{
-				//notTheMessagesToProcess[i] = &messagesToProcess[i];
-				void** c = (void**)&notTheMessagesToProcess[i];
-				*c = (void*)&messagesToProcess[i];
-				++numMessagesToProcess;
-				//messagesToProcess[i] = message;
-				memcpy(&messagesToProcess[i], message, a);
-				break;
+				return; //< discard the message
 			}
-		}
+			for(int i = 0; i < length(messagesToProcess); ++i)
+			{
+				// NOTE: I think that discard_message doesn't actually discard the message
+				// NOTE: tcp_mini still has some code that should not be kept as is (referring to "blocking of sockets")
+
+				// CHANGELIST: ..
+				// .. String now copy constructs strings by copying the contents of the source buffer into a new one (internally in tcp-mini)
+				// .. displaying of "hello" message is now working (fixed incorrect pointer offsetting)
+				/*
+				 * if a slot in messagesToProcess is not occupied, the "same indexed" slot in notTheMessagesToProcess will be NULL
+				 * numMessagesToProcess is to be kept "up-to-date" accordingly
+				 */
+				if(notTheMessagesToProcess[i] == NULL)
+				{
+					//notTheMessagesToProcess[i] = &messagesToProcess[i];
+					void** c = (void**)&notTheMessagesToProcess[i];
+					*c = (void*)&messagesToProcess[i];
+					++numMessagesToProcess;
+					//messagesToProcess[i] = message;
+					memcpy(&messagesToProcess[i], message, a);
+					break;
+				}
+			}
 		}
 		break;
 	}
