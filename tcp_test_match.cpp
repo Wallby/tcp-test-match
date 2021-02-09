@@ -124,7 +124,7 @@ void my_on_hung_up(char* ip)
 int main()
 {
   tm_set_on_receive(my_on_receive);
-  tm_set_on_hung_up(my_on_hung_up);
+  TM_SET_ON_HUNG_UP(my_on_hung_up);
   tm_set_on_connected_to_us(my_on_connected_to_us);
 
   printf("started\n");
@@ -158,6 +158,6 @@ int main()
   tm_stop_being_a_match();
 
   tm_unset_on_connected_to_us();
-  tm_unset_on_hung_up();
+  TM_UNSET_ON_HUNG_UP();
   tm_unset_on_receive(); //< NOTE: do we want to do this after/before stop_being_a_match?
 }
